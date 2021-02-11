@@ -6,22 +6,17 @@ import java.util.Random;
 public class EquationSolver {
     public static void main(String[] args)
     {
-//        Expression myExpression = new Expression("(1 - (2 - (3 - 4) * 3 / 2) / 3) + 5");
-//        System.out.println(myExpression);
-//        System.out.println(myExpression.getValue());
-        int decimalAccuracy = 10; // TODO: Double check this is doing what it should be.
-        System.out.println(solve("16*x^2-25*x-9 = -1", decimalAccuracy));
+        Expression myExpression = new Expression("(1 - (2 - (3 - 4) * 3 / 2) / 3) + 5");
+        System.out.println(myExpression);
+        System.out.println(myExpression.getValue());
+        int decimalAccuracy = 25;
+        System.out.println(solve("4*x^3-10*x+-4 = 0", decimalAccuracy));
         /*
          * Coefficients must be split away and multiplied - including negatives!
          */
-        //TODO: make it so you can type next-to multiplication notation.
         //TODO: add checking to see if it grows very fast (or very slow?)
-        //TODO: prevent variable value concatenation.
         //TODO: check if it's taking a long time, and run again.
         //TODO: try making range offset / size random as well.
-        //TODO: add turning coefficients into multiplication automatically.
-        //TODO: add GUI
-        //TODO: show interpretation wihtout replacing stuff with nines.
         /*
         Seems like sometimes converging takes a long time...
          */
@@ -51,7 +46,7 @@ public class EquationSolver {
             return null;
         }
         convergeBounds(lowerBound, upperBound, expressionString, variableCharacter, target, numDecimalsAccurate);
-        System.out.println("An input of " + lowerBound[0] + " gets the output " + lowerBound[1] + ".");
+        System.out.println("An input of " + lowerBound[0].toPlainString() + " gets the output " + lowerBound[1].toPlainString() + ".");
         return getAgreedUponBigDecimal(upperBound[0], lowerBound[0]);
     }
 
