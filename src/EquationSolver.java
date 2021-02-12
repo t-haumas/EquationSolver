@@ -6,11 +6,11 @@ import java.util.Random;
 public class EquationSolver {
     public static void main(String[] args)
     {
-        Expression myExpression = new Expression("(1 - (2 - (3 - 4) * 3 / 2) / 3) + 5");
+        Expression myExpression = new Expression("(15) + 4");
         System.out.println(myExpression);
         System.out.println(myExpression.getValue());
         int decimalAccuracy = 25;
-        System.out.println(solve("4*x^3-10*x+-4 = 0", decimalAccuracy));
+        System.out.println(solve("1 + (x + ) 2 = 0", decimalAccuracy));
         /*
          * Coefficients must be split away and multiplied - including negatives!
          */

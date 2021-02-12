@@ -11,136 +11,160 @@ public class Expression {
 
     private LinkedList<Expression> operands;
     private LinkedList<Operation> operations;
-    private boolean evaluated;
     private BigDecimal value;
     private int numNestedExpressions;
+    private StringBuilder operandBuilder;
+    private int currentCharacterPosition;
+    private String pureExpressionString;
 
     public Expression(String expressionString) {
-        evaluated = false;
+
         operands = new LinkedList<>();
         operations = new LinkedList<>();
-
-        String myExpressionString = expressionString.replaceAll(" ", "");
-        StringBuilder operandBuilder = new StringBuilder();
         numNestedExpressions = 0;
-        int i = 0;
-        for (char character : myExpressionString.toCharArray())
+
+        pureExpressionString = expressionString.replaceAll(" ", "");
+        operandBuilder = new StringBuilder();
+
+        currentCharacterPosition = 0;
+        for (char character : pureExpressionString.toCharArray())
         {
-            if (character >= 48 && character <= 57 || character == 46)
+            if (character == '(')
             {
-                appendToExpression(operandBuilder, character, true);
-            }
-            else if (character == 42 || character == 43 || character == 47 || character == 94)
-            {
-                appendToExpression(operandBuilder, character, false);
-            }
-            else if (character == 45) {
-                if (i == 0)
+                if (numNestedExpressions > 0)
                 {
-                    appendToExpression(operandBuilder, character, true);
+                    operandBuilder.append('(');
                 }
-                else {
-                    char previousCharacter = myExpressionString.charAt(i - 1);
-                    if (previousCharacter >= 48 && previousCharacter <= 57 || previousCharacter == 46 || previousCharacter == ')') {
-                        appendToExpression(operandBuilder, character, false);
-                    } else {
-                        appendToExpression(operandBuilder, character, true);
-                    }
-                }
-            }
-            else if (character == 40)
-            {
                 numNestedExpressions++;
-                if (numNestedExpressions > 1) {
-                    appendToExpression(operandBuilder, character, true);
-                }
             }
-            else if (character == 41)
+            else if (character == ')')
             {
                 numNestedExpressions--;
-                if (numNestedExpressions >= 1) {
-                    appendToExpression(operandBuilder, character, true);
+                if (numNestedExpressions > 0)
+                {
+                    operandBuilder.append(')');
                 }
+            }
+            else if (isOperandCharacter(character)) {
+                operandBuilder.append(character);
+                if (! nextCharacterIsOperandCharacter(currentCharacterPosition, pureExpressionString) || nextCharacterWillFinishNestedExpression(currentCharacterPosition, pureExpressionString))
+                {
+                    // This is the last character of the operand.
+                    addOperand();
+                }
+            }
+            else if (isRawOperationCharacter(character))
+            {
+                operations.add(new Operation(character, operations.size()));
             }
             else
             {
                 throw new IllegalArgumentException("Invalid character in expression: '" + character + "'.");
             }
-            i++;
+            currentCharacterPosition++;
         }
-        addOperand(operandBuilder);
+
+        if (numNestedExpressions != 0)
+        {
+            throw new ExpressionParseException("Parenthesis mismatch: too many " + (numNestedExpressions < 0 ? "closing" : "opening") + " parenthesis.");
+        }
+
+        evaluate();
     }
 
     public Expression(BigDecimal value)
     {
         this.value = new BigDecimal(value.toString(), new MathContext(100));
-        evaluated = true;
     }
 
-    private void appendToExpression(StringBuilder operandBuilder, char character, boolean isOperandCharacter) {
-        if (isOperandCharacter || numNestedExpressions > 0) {
-            operandBuilder.append(character);
-        } else {
-            if (operandBuilder.length() < 1) {
-                throw new IllegalArgumentException("Must have an operand before operation '" + character + "'.");
-            }
-            addOperand(operandBuilder);
-            operandBuilder.delete(0, operandBuilder.length());
-            operations.add(new Operation(character, operations.size()));
+    private boolean nextCharacterWillFinishNestedExpression(int currentCharacterPosition, String pureExpressionString)
+    {
+        if (currentCharacterPosition == pureExpressionString.length() - 1) {
+            return false;
         }
+        return pureExpressionString.charAt(currentCharacterPosition + 1) == ')' && numNestedExpressions == 1;
     }
 
-    private void addOperand(StringBuilder operandBuilder) {
+    private boolean nextCharacterIsOperandCharacter(int currentCharacterPosition, String pureExpressionString)
+    {
+        if (currentCharacterPosition == pureExpressionString.length() - 1) {
+            return false;
+        }
+        return isOperandCharacter(pureExpressionString.charAt(currentCharacterPosition + 1));
+    }
+
+    private boolean isRawOperationCharacter(char character)
+    {
+        return character == '*' || character == '^' || character == '-' || character == '/' || character == '+';
+    }
+
+    private boolean isOperandCharacter(char character)
+    {
+        return '0' <= character && character <= '9' || character == '.' || character == '-' && justFinishedParsingOperation() || numNestedExpressions > 0;
+    }
+
+    private boolean justFinishedParsingOperation()
+    {
+        return operations.size() == operands.size() && operandBuilder.length() == 0 || pureExpressionString.charAt(0) == '-' && currentCharacterPosition == 0;
+    }
+
+    private void addOperand() {
         try {
-            if (operandBuilder.toString().contains("+") || operandBuilder.toString().contains("*") || operandBuilder.toString().contains("/") || operandBuilder.toString().contains("^") || operandBuilder.toString().indexOf("-") > 0 || containsMultipleMinuses(operandBuilder.toString().toCharArray())) {
-                operands.add(new Expression(operandBuilder.toString()));
+            String operandString = operandBuilder.toString();
+            if (stringContainsRawOperationCharacter(operandString) && ! stringIsNegativeNumber(operandString)) {
+                operands.add(new Expression(operandString));
             } else {
-                operands.add(new Expression(new BigDecimal(operandBuilder.toString(), new MathContext(100))));
+                operands.add(new Expression(new BigDecimal(operandString, new MathContext(100))));
             }
         } catch (NumberFormatException nfe) {
             throw new IllegalArgumentException("Illegal operand: '" + operandBuilder.toString() + "'.");
         }
+        operandBuilder.delete(0, operandBuilder.length());
     }
 
-    private boolean containsMultipleMinuses(char[] characterArray) {
-        int numMinuses = 0;
-        for (char character : characterArray)
+    private boolean stringIsNegativeNumber(String operandString) {
+        if (operandString.charAt(0) == '-') {
+            try {
+                BigDecimal bigDecimal = new BigDecimal(operandString);
+                return true;
+            } catch (NumberFormatException nfe) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private boolean stringContainsRawOperationCharacter(String operand)
+    {
+        for (char c : operand.toCharArray())
         {
-            if (character == '-')
+            if (isRawOperationCharacter(c))
             {
-                numMinuses++;
-                if (numMinuses > 1)
-                {
-                    return true;
-                }
+                return true;
             }
         }
         return false;
     }
 
     private void evaluate() {
-        if (! evaluated)
+        PriorityQueue<Operation> operationsToEvaluate = new PriorityQueue<>(10, Collections.reverseOrder());
+        for (Operation operation : operations)
         {
-            PriorityQueue<Operation> operationsToEvaluate = new PriorityQueue<Operation>(10, Collections.reverseOrder());
-            for (Operation operation : operations)
-            {
-                operationsToEvaluate.offer(operation);
-            }
-            Operation currentOperation;
-            Expression result;
-            while (! operationsToEvaluate.isEmpty())
-            {
-                currentOperation = operationsToEvaluate.remove();
-                int currentOperationIndex = operations.indexOf(currentOperation);
-                Expression firstOperand = operands.remove(currentOperationIndex);
-                Expression secondOperand = operands.remove(currentOperationIndex);
-                result = new Expression(evaluateOperation(currentOperation, firstOperand, secondOperand));
-                operations.remove(currentOperation);
-                operands.add(currentOperationIndex, result);
-            }
-            value = operands.get(0).value;
-            evaluated = true;
+            operationsToEvaluate.offer(operation);
         }
+        Operation currentOperation;
+        Expression result;
+        while (! operationsToEvaluate.isEmpty())
+        {
+            currentOperation = operationsToEvaluate.remove();
+            int currentOperationIndex = operations.indexOf(currentOperation);
+            Expression firstOperand = operands.remove(currentOperationIndex);
+            Expression secondOperand = operands.remove(currentOperationIndex);
+            result = new Expression(evaluateOperation(currentOperation, firstOperand, secondOperand));
+            operations.remove(currentOperation);
+            operands.add(currentOperationIndex, result);
+        }
+        value = operands.get(0).value;
     }
 
     private BigDecimal evaluateOperation(Operation currentOperation, Expression firstOperand, Expression secondOperand)
@@ -168,10 +192,6 @@ public class Expression {
     }
 
     public BigDecimal getValue() {
-        if (! evaluated)
-        {
-            evaluate();
-        }
         return new BigDecimal(value.toString()).stripTrailingZeros();
     }
 
